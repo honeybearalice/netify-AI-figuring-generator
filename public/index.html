@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI手办生成器 - 豆包驱动</title>
+    <title>AI手办生成器 </title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .gradient-bg {
@@ -57,7 +57,7 @@
         <!-- Header -->
         <div class="text-center mb-8">
             <h1 class="text-4xl font-bold text-white mb-2">🎭 AI手办生成器</h1>
-            <p class="text-xl text-white opacity-90">豆包AI驱动 - 将你的照片转换为精美的3D手办模型</p>
+            <p class="text-xl text-white opacity-90">AI驱动 - 将你的照片转换为精美的3D手办模型</p>
         </div>
 
         <!-- Main Content -->
@@ -209,10 +209,10 @@
 
                     <!-- Generate Button -->
                     <button id="generateBtn" onclick="generateFigurine()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-6 rounded-lg transition-colors text-lg shadow-lg">
-                        <span id="generateText">🎨 生成手办（豆包AI）</span>
+                        <span id="generateText">🎨 生成手办</span>
                         <div id="generateLoading" class="hidden flex items-center justify-center">
                             <div class="loading-spinner mr-3"></div>
-                            豆包AI生成中...
+                            AI生成中...
                         </div>
                     </button>
                 </div>
@@ -251,11 +251,13 @@
                 </div>
             </div>
 
-            <!-- Generated Prompt Display -->
-            <div class="mt-8 glass-effect rounded-xl p-6">
-                <h3 class="text-xl font-bold text-white mb-3">🤖 AI提示词预览</h3>
-                <div id="promptPreview" class="bg-black/30 rounded-lg p-4 text-white/80 font-mono text-sm min-h-20">
-                    <em>选择风格后将显示生成的提示词...</em>
+            <!-- Generated Prompt Display (Hidden for mystery) -->
+            <div id="promptPreviewContainer" class="hidden">
+                <div class="mt-8 glass-effect rounded-xl p-6">
+                    <h3 class="text-xl font-bold text-white mb-3">🤖 AI提示词预览</h3>
+                    <div id="promptPreview" class="bg-black/30 rounded-lg p-4 text-white/80 font-mono text-sm min-h-20">
+                        <em>选择风格后将显示生成的提示词...</em>
+                    </div>
                 </div>
             </div>
         </div>
@@ -266,8 +268,8 @@
         let uploadedImage = null;
         let currentImageUrl = null;
 
-        // 豆包专用的风格模板
-        const doubaoStyleTemplates = {
+        // AI风格模板
+        const aiStyleTemplates = {
             custom: `根据上传的照片，精确还原创建一个真人定制手办模型。要求：
 1. 采用Q版写实风格，保持人物真实面部特征但略微可爱化
 2. 完全按照照片中的服装样式、颜色、质感进行还原
@@ -360,7 +362,7 @@
             const showBox = document.getElementById('showBox').checked;
             const showDesk = document.getElementById('showDesk').checked;
 
-            let prompt = doubaoStyleTemplates[selectedStyle];
+            let prompt = aiStyleTemplates[selectedStyle];
             
             // Custom style specific additions
             if (selectedStyle === 'custom') {
@@ -449,21 +451,35 @@
 
                 console.log('发送生成请求...');
                 
-                // 调用后端API
+                // 调用后端API，增加错误处理和重试机制
                 const response = await fetch('/api/generate', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(requestData)
+                    body: JSON.stringify(requestData),
+                    // 添加超时设置
+                    signal: AbortSignal.timeout(60000) // 60秒超时
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                    // 尝试安全地解析错误响应
+                    try {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP ${response.status}`);
+                    } catch (jsonError) {
+                        // 如果JSON解析失败，提供更明确的错误信息
+                        throw new Error(`服务器错误: ${response.status}, 无法解析响应内容`);
+                    }
                 }
 
-                const result = await response.json();
+                // 安全地解析响应
+                let result;
+                try {
+                    result = await response.json();
+                } catch (jsonError) {
+                    throw new Error('无法解析服务器响应，请检查网络连接并重试');
+                }
                 
                 if (result.success && result.imageUrl) {
                     currentImageUrl = result.imageUrl;
@@ -474,7 +490,7 @@
                 
             } catch (error) {
                 console.error('生成失败:', error);
-                alert('生成失败: ' + error.message + '\n\n请检查:\n1. 豆包API密钥是否正确配置\n2. 网络连接是否正常\n3. 后端服务是否启动');
+                alert('生成失败: ' + error.message + '\n\n请检查:\n1. API密钥是否正确配置\n2. 网络连接是否正常\n3. 后端服务是否启动');
             } finally {
                 // Reset button state
                 generateBtn.disabled = false;
@@ -484,15 +500,58 @@
         }
 
         function showResult(imageUrl) {
+            // 保存当前图片URL用于重试加载
+            currentImageUrl = imageUrl;
+            
             document.getElementById('placeholderContent').classList.add('hidden');
             document.getElementById('resultContent').classList.remove('hidden');
             
             // 显示生成的图片
             const resultImage = document.getElementById('resultImage');
             resultImage.innerHTML = `
-                <img src="${imageUrl}" alt="生成的手办" class="result-image mx-auto">
-                <p class="text-white/80 text-sm mt-3">✨ 豆包AI生成成功！</p>
+                <div class="relative">
+                    <img src="${imageUrl}" alt="生成的手办" class="result-image mx-auto">
+                    <div id="imageErrorOverlay" class="hidden absolute inset-0 bg-black/60 rounded-xl flex flex-col items-center justify-center text-white p-4">
+                        <div class="text-5xl mb-3">⚠️</div>
+                        <p class="text-center mb-4">图片加载失败</p>
+                        <button onclick="retryLoadImage()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            🔄 重试加载
+                        </button>
+                    </div>
+                </div>
+                <p class="text-white/80 text-sm mt-3">✨ AI生成成功！</p>
+                <p class="text-white/60 text-xs mt-1">如果图片无法显示，请点击上方的"重试加载"按钮</p>
             `;
+            
+            // 添加图片加载错误处理
+            const img = resultImage.querySelector('img');
+            img.onerror = function() {
+                document.getElementById('imageErrorOverlay').classList.remove('hidden');
+                console.error('图片加载失败:', imageUrl);
+            };
+        }
+        
+        function retryLoadImage() {
+            if (currentImageUrl) {
+                const img = document.querySelector('#resultImage img');
+                const errorOverlay = document.getElementById('imageErrorOverlay');
+                
+                // 添加时间戳参数防止缓存问题
+                const timestamp = new Date().getTime();
+                const urlWithTimestamp = currentImageUrl.includes('?') 
+                    ? `${currentImageUrl}&t=${timestamp}` 
+                    : `${currentImageUrl}?t=${timestamp}`;
+                
+                img.src = urlWithTimestamp;
+                errorOverlay.classList.add('hidden');
+                
+                // 再次添加错误处理
+                img.onerror = function() {
+                    errorOverlay.classList.remove('hidden');
+                    console.error('重试加载失败:', urlWithTimestamp);
+                    alert('图片加载失败，请检查您的网络连接或稍后重试\n\n如果问题持续，请尝试以下解决方法:\n1. 检查您的网络连接\n2. 尝试使用不同的浏览器\n3. 稍后再试，因为图片URL可能有访问限制');
+                };
+            }
         }
 
         function downloadImage() {
@@ -589,7 +648,7 @@
             .then(data => {
                 console.log('API状态:', data);
                 if (!data.hasApiKey) {
-                    console.warn('⚠️ 豆包API密钥未配置');
+                    console.warn('⚠️ API密钥未配置');
                 }
             })
             .catch(err => {

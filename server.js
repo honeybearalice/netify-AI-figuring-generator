@@ -32,34 +32,46 @@ const DOUBAO_API_KEY = process.env.DOUBAO_API_KEY;
 const DOUBAO_MODEL = process.env.DOUBAO_MODEL || 'ep-20250917182847-vj4mj';
 
 // 图片生成API路由
-app.post('/api/generate', async (req, res) => {
+  app.post('/api/generate', async (req, res) => {
     try {
-        console.log('收到生成请求...');
-        const { prompt, image, style, options } = req.body;
-
-        if (!prompt) {
-            return res.status(400).json({ error: '提示词不能为空' });
-        }
-
-        console.log('生成参数:', { prompt: prompt.substring(0, 100), style, options });
-
-        // 调用AI生成图片
-        const result = await generateWithDoubaoDirect(prompt, image);
-
-        console.log('生成成功，返回图片URL');
-        res.json({
-            success: true,
-            imageUrl: result.imageUrl,
-            prompt: result.prompt
+      console.log('收到生成请求...');
+      // 验证请求体是否存在
+      if (!req.body) {
+        return res.status(400).json({
+          success: false,
+          error: '请求体不能为空'
         });
+      }
+      
+      const { prompt, image, style, options } = req.body;
+
+      if (!prompt) {
+        return res.status(400).json({
+          success: false,
+          error: '提示词不能为空'
+        });
+      }
+
+      console.log('生成参数:', { prompt: prompt.substring(0, 100), style, options });
+
+      // 调用AI生成图片
+      const result = await generateWithDoubaoDirect(prompt, image);
+
+      console.log('生成成功，返回图片URL');
+      res.json({
+        success: true,
+        imageUrl: result.imageUrl,
+        prompt: result.prompt
+      });
     } catch (error) {
-        console.error('生成失败:', error);
-        res.status(500).json({
-            success: false,
-            error: `生成失败: ${error.message}`
-        });
+      console.error('生成失败:', error);
+      // 确保返回有效的JSON对象，即使在发生错误时
+      res.status(500).json({
+        success: false,
+        error: `生成失败: ${error.message || '未知错误'}`
+      });
     }
-});
+  });
 
 // 使用豆包的直接图像生成API
 async function generateWithDoubaoDirect(prompt, image) {
