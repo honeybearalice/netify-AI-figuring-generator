@@ -10,3 +10,9 @@
 
 [build.environment]
   NODE_VERSION = "18"
+
+[functions]
+  # 增加函数执行超时时间到30秒（默认通常是10秒）
+  timeout = 30
+  # 增加函数内存限制到512MB
+  memory = 512
